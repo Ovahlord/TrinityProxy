@@ -72,28 +72,50 @@ public class ProxyListener
                     continue;
                 }
 
-                RateLimitedStream clientStream = new(clientClient.GetStream(), _streamRateLimiterOptions,
-                    _proxyListenerSettings.MaxBytesPerRead, _proxyListenerSettings.CloseConnectionWhenRateExceeded)
-                {
-                    ReadTimeout = _proxyListenerSettings.ReceiveTimeout
-                };
-                    
-                Console.WriteLine($"Attempting to connect to Server: {_serverEndPoint}");
-                TcpClient serverClient = new();
-                await serverClient.ConnectAsync(_serverEndPoint, cancellationToken);
-                    
-                Console.WriteLine($"New connection established with server {serverClient.Client.RemoteEndPoint}");
-                    
-                new ProxyBridge(clientStream, serverClient.GetStream());
-                
+                // Bridging runs off the accept loop so that a slow or unreachable server
+                // neither blocks new clients nor tears the listener down when it fails.
+                _ = EstablishConnectionAsync(clientClient, cancellationToken);
             }
         }
         catch (OperationCanceledException)
         {
-        }       
-        finally 
+        }
+        finally
         {
             listener.Stop();
+        }
+    }
+
+    private async Task EstablishConnectionAsync(TcpClient clientClient, CancellationToken cancellationToken)
+    {
+        RateLimitedStream? clientStream = null;
+        TcpClient? serverClient = null;
+
+        try
+        {
+            clientStream = new RateLimitedStream(clientClient.GetStream(), _streamRateLimiterOptions,
+                _proxyListenerSettings.MaxBytesPerRead, _proxyListenerSettings.CloseConnectionWhenRateExceeded)
+            {
+                ReadTimeout = _proxyListenerSettings.ReceiveTimeout
+            };
+
+            Console.WriteLine($"Attempting to connect to Server: {_serverEndPoint}");
+            serverClient = new TcpClient();
+            await serverClient.ConnectAsync(_serverEndPoint, cancellationToken);
+
+            Console.WriteLine($"New connection established with server {serverClient.Client.RemoteEndPoint}");
+
+            // The bridge takes ownership of both streams once it is constructed.
+            new ProxyBridge(clientStream, serverClient.GetStream());
+        }
+        catch (Exception exception)
+        {
+            if (exception is not OperationCanceledException)
+                Console.WriteLine($"Failed to connect to server {_serverEndPoint}: {exception.Message}");
+
+            clientStream?.Dispose();
+            serverClient?.Dispose();
+            clientClient.Dispose();
         }
     }
 }
