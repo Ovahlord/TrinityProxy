@@ -5,17 +5,19 @@
       "ServerIpEndpoint": "127.0.0.1:8085",
       "MaxBytesPerSecond": 4096,
       "MaxBytesPerRead": 50,
+      "CloseConnectionWhenRateExceeded": false,
       "ReceiveTimeout": 6000,
-      "ConnectionBacklogSize": 500,
+      "ConnectionBacklogSize": 100,
       "ConnectionsPerSecond": 100
     },
     {
       "ClientIpEndpoint": "127.0.0.1:3724",
       "ServerIpEndpoint": "127.0.0.1:3725",
-      "MaxBytesPerSecond": 512,
-      "MaxBytesPerRead": 100,
+      "MaxBytesPerSecond": 10,
+      "MaxBytesPerRead": 10,
+      "CloseConnectionWhenRateExceeded": true,
       "ReceiveTimeout": 6000,
-      "ConnectionBacklogSize": 500,
+      "ConnectionBacklogSize": 100,
       "ConnectionsPerSecond": 100
     }
   ]

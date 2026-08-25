@@ -12,15 +12,13 @@ public class ProxyListener
     private readonly SlidingWindowRateLimiterOptions _streamRateLimiterOptions;
     private readonly SlidingWindowRateLimiter _connectionRateLimiter;
     private readonly CancellationTokenSource _cancellationTokenSource;
-    private readonly int _maxBytesPerRead;
-    private readonly int _connectionBacklogSize;
+    private readonly ProxyListenerSettings _proxyListenerSettings;
     
     public ProxyListener(ProxyListenerSettings proxyListenerSettings)
     {
         _clientEndPoint = IPEndPoint.Parse(proxyListenerSettings.ClientIpEndpoint);
         _serverEndPoint = IPEndPoint.Parse(proxyListenerSettings.ServerIpEndpoint);
-        _maxBytesPerRead =  proxyListenerSettings.MaxBytesPerRead;
-        _connectionBacklogSize = proxyListenerSettings.ConnectionBacklogSize;
+        _proxyListenerSettings = proxyListenerSettings;
         
         _streamRateLimiterOptions = new SlidingWindowRateLimiterOptions()
         {
@@ -57,7 +55,7 @@ public class ProxyListener
     private async Task ListenForClientsAsync(CancellationToken cancellationToken = default)
     {
         TcpListener listener = new(_clientEndPoint);
-        listener.Start(_connectionBacklogSize);
+        listener.Start(_proxyListenerSettings.ConnectionBacklogSize);
         
         try
         {
@@ -68,12 +66,15 @@ public class ProxyListener
                 if (!lease.IsAcquired)
                 {
                     clientClient.Close();
-                    clientClient.Dispose();
                     Console.WriteLine($"New connection denied due to exceeding rate limit {clientClient.Client.RemoteEndPoint}");
                     continue;
                 }
-                    
-                RateLimitedStream clientStream = new(clientClient.GetStream(), _streamRateLimiterOptions, _maxBytesPerRead);
+
+                RateLimitedStream clientStream = new(clientClient.GetStream(), _streamRateLimiterOptions,
+                    _proxyListenerSettings.MaxBytesPerRead, _proxyListenerSettings.CloseConnectionWhenRateExceeded)
+                {
+                    ReadTimeout = _proxyListenerSettings.ReceiveTimeout
+                };
                     
                 Console.WriteLine($"Attempting to connect to Server: {_serverEndPoint}");
                 TcpClient serverClient = new();
