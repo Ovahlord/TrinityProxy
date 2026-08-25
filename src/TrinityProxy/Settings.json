@@ -6,7 +6,7 @@
       "MaxBytesPerSecond": 4096,
       "MaxBytesPerRead": 50,
       "CloseConnectionWhenRateExceeded": false,
-      "ReceiveTimeout": 6000,
+      "ReceiveTimeout": 60000,
       "ConnectionBacklogSize": 100,
       "ConnectionsPerSecond": 100
     },
@@ -16,7 +16,7 @@
       "MaxBytesPerSecond": 250,
       "MaxBytesPerRead": 50,
       "CloseConnectionWhenRateExceeded": true,
-      "ReceiveTimeout": 2000,
+      "ReceiveTimeout": 60000,
       "ConnectionBacklogSize": 100,
       "ConnectionsPerSecond": 100
     }
