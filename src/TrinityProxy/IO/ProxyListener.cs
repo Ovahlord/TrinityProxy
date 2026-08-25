@@ -65,8 +65,10 @@ public class ProxyListener
                 RateLimitLease lease = await _connectionRateLimiter.AcquireAsync(1, cancellationToken);
                 if (!lease.IsAcquired)
                 {
+                    // Read the endpoint before closing: TcpClient.Client is null once the client is closed.
+                    EndPoint? deniedEndPoint = clientClient.Client.RemoteEndPoint;
                     clientClient.Close();
-                    Console.WriteLine($"New connection denied due to exceeding rate limit {clientClient.Client.RemoteEndPoint}");
+                    Console.WriteLine($"New connection denied due to exceeding rate limit {deniedEndPoint}");
                     continue;
                 }
 
