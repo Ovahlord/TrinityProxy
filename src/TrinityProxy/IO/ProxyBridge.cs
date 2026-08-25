@@ -8,7 +8,9 @@ public class ProxyBridge
     private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly Stream _clientStream;
     private readonly Stream _serverStream;
-    
+    private int _closed;
+
+
     public ProxyBridge(Stream clientStream, Stream serverStream)
     {
         _cancellationTokenSource = new CancellationTokenSource();
@@ -21,9 +23,11 @@ public class ProxyBridge
 
     private void Close()
     {
-        if (_cancellationTokenSource.IsCancellationRequested)
+        // Both directions can fail at the same instant, and Cancel() after Dispose() throws,
+        // so exactly one caller must be allowed through.
+        if (Interlocked.Exchange(ref _closed, 1) == 1)
             return;
-        
+
         _cancellationTokenSource.Cancel();
         _cancellationTokenSource.Dispose();
         _clientStream.Dispose();
