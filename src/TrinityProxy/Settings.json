@@ -1,0 +1,22 @@
+{
+  "ProxyListeners" : [
+    {
+      "ClientIpEndpoint": "127.0.0.1:8090",
+      "ServerIpEndpoint": "127.0.0.1:8085",
+      "MaxBytesPerSecond": 4096,
+      "MaxBytesPerRead": 50,
+      "ReceiveTimeout": 6000,
+      "ConnectionBacklogSize": 500,
+      "ConnectionsPerSecond": 100
+    },
+    {
+      "ClientIpEndpoint": "127.0.0.1:3724",
+      "ServerIpEndpoint": "127.0.0.1:3725",
+      "MaxBytesPerSecond": 512,
+      "MaxBytesPerRead": 100,
+      "ReceiveTimeout": 6000,
+      "ConnectionBacklogSize": 500,
+      "ConnectionsPerSecond": 100
+    }
+  ]
+}
