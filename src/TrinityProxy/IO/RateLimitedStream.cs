@@ -84,6 +84,18 @@ public class RateLimitedStream : Stream
     public override long Seek(long offset, SeekOrigin origin) => _innerStream.Seek(offset, origin);
     public override void SetLength(long value) => _innerStream.SetLength(value);
     public override void Write(byte[] buffer, int offset, int count) => _innerStream.Write(buffer, offset, count);
+
+    // Writes are deliberately not rate limited, but they must still be forwarded explicitly:
+    // the base Stream implementations would run the synchronous Write and Flush on a thread
+    // pool thread for every relayed buffer.
+    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
+        _innerStream.WriteAsync(buffer, cancellationToken);
+
+    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+        _innerStream.WriteAsync(buffer, offset, count, cancellationToken);
+
+    public override Task FlushAsync(CancellationToken cancellationToken) =>
+        _innerStream.FlushAsync(cancellationToken);
     
     public override bool CanRead =>  _innerStream.CanRead;
     public override bool CanSeek => _innerStream.CanSeek;
