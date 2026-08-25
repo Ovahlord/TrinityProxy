@@ -43,7 +43,12 @@ public class ProxyListener
 
     public void Start()
     {
-        _ = ListenForClientsAsync(_cancellationTokenSource.Token);
+        // Bind synchronously so that a failure to claim the port surfaces to the caller
+        // instead of disappearing into the discarded accept loop task.
+        TcpListener listener = new(_clientEndPoint);
+        listener.Start(_proxyListenerSettings.ConnectionBacklogSize);
+
+        _ = ListenForClientsAsync(listener, _cancellationTokenSource.Token);
     }
 
     public void Stop()
@@ -52,11 +57,8 @@ public class ProxyListener
         _cancellationTokenSource.Dispose();
     }
 
-    private async Task ListenForClientsAsync(CancellationToken cancellationToken = default)
+    private async Task ListenForClientsAsync(TcpListener listener, CancellationToken cancellationToken = default)
     {
-        TcpListener listener = new(_clientEndPoint);
-        listener.Start(_proxyListenerSettings.ConnectionBacklogSize);
-        
         try
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -79,6 +81,12 @@ public class ProxyListener
         }
         catch (OperationCanceledException)
         {
+        }
+        catch (Exception exception)
+        {
+            // The accept loop runs detached, so anything unexpected has to be reported here
+            // or the listener would go quiet with no trace of why.
+            Console.WriteLine($"Listener {_clientEndPoint} stopped unexpectedly: {exception.Message}");
         }
         finally
         {
