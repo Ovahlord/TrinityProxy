@@ -88,7 +88,6 @@ public class ProxyListener
         }
         catch (OperationCanceledException)
         {
-            
         }       
         finally 
         {

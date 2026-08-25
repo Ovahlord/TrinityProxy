@@ -13,10 +13,10 @@
     {
       "ClientIpEndpoint": "127.0.0.1:3724",
       "ServerIpEndpoint": "127.0.0.1:3725",
-      "MaxBytesPerSecond": 10,
-      "MaxBytesPerRead": 10,
+      "MaxBytesPerSecond": 250,
+      "MaxBytesPerRead": 50,
       "CloseConnectionWhenRateExceeded": true,
-      "ReceiveTimeout": 6000,
+      "ReceiveTimeout": 2000,
       "ConnectionBacklogSize": 100,
       "ConnectionsPerSecond": 100
     }
