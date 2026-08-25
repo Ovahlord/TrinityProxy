@@ -6,10 +6,15 @@ namespace TrinityProxy.IO;
 public class ProxyBridge
 {
     private readonly CancellationTokenSource _cancellationTokenSource;
+    private readonly Stream _clientStream;
+    private readonly Stream _serverStream;
     
     public ProxyBridge(Stream clientStream, Stream serverStream)
     {
         _cancellationTokenSource = new CancellationTokenSource();
+        _clientStream = clientStream;
+        _serverStream = serverStream;
+        
         _ = RouteStreamDataAsync(clientStream, serverStream, _cancellationTokenSource.Token);
         _ = RouteStreamDataAsync(serverStream, clientStream, _cancellationTokenSource.Token);
     }
@@ -21,58 +26,53 @@ public class ProxyBridge
         
         _cancellationTokenSource.Cancel();
         _cancellationTokenSource.Dispose();
+        _clientStream.Dispose();
+        _serverStream.Dispose();
         Console.WriteLine("Bridge closed");
     }
     
     private async Task RouteStreamDataAsync(Stream fromStream, Stream toStream, CancellationToken cancellationToken = default)
     {
-        await using (fromStream)
+        PipeReader reader = PipeReader.Create(fromStream);
+        PipeWriter writer = PipeWriter.Create(toStream);
+
+        try
         {
-            await using (toStream)
+            while (!cancellationToken.IsCancellationRequested)
             {
-                PipeReader reader = PipeReader.Create(fromStream);
-                PipeWriter writer = PipeWriter.Create(toStream);
-                
                 try
                 {
-                    while (!cancellationToken.IsCancellationRequested)
-                    {
-                        try
-                        {
-                            ReadResult result = await reader.ReadAsync(cancellationToken);
-                            ReadOnlySequence<byte> buffer = result.Buffer;
+                    ReadResult result = await reader.ReadAsync(cancellationToken);
+                    ReadOnlySequence<byte> buffer = result.Buffer;
 
-                            foreach (ReadOnlyMemory<byte> segment in buffer)
-                            {
-                                writer.Write(segment.Span);
-                            }
-                            
-                            reader.AdvanceTo(buffer.End);
-                            
-                            FlushResult flushResult = await writer.FlushAsync(cancellationToken);
-                            if (flushResult.IsCompleted || result.IsCompleted)
-                            {
-                                Close();
-                                Console.WriteLine("Bridge closed");
-                            }
-                            
-                        }
-                        catch (OperationCanceledException)
-                        {
-                        }
-                        catch (Exception)
-                        {
-                            Close();
-                            Console.WriteLine("Bridge closed");
-                        }
+                    foreach (ReadOnlyMemory<byte> segment in buffer)
+                    {
+                        writer.Write(segment.Span);
+                    }
+
+                    reader.AdvanceTo(buffer.End);
+
+                    FlushResult flushResult = await writer.FlushAsync(cancellationToken);
+                    if (flushResult.IsCompleted || result.IsCompleted)
+                    {
+                        Close();
+                        return;
                     }
                 }
-                finally
+                catch (OperationCanceledException)
                 {
-                    await reader.CompleteAsync();
-                    await writer.CompleteAsync();
+                }
+                catch (Exception)
+                {
+                    Close();
+                    Console.WriteLine("Bridge closed");
                 }
             }
+        }
+        finally
+        {
+            await reader.CompleteAsync();
+            await writer.CompleteAsync();
         }
     }
     
