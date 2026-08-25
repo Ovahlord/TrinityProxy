@@ -63,13 +63,12 @@ public class ProxyBridge
                         return;
                     }
                 }
-                catch (OperationCanceledException)
-                {
-                }
                 catch (Exception)
                 {
+                    // Cancellation included: either way this direction is finished, and
+                    // continuing the loop would keep using streams Close() has disposed.
                     Close();
-                    Console.WriteLine("Bridge closed");
+                    return;
                 }
             }
         }
