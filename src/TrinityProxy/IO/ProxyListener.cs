@@ -102,10 +102,8 @@ public class ProxyListener
         try
         {
             clientStream = new RateLimitedStream(clientClient.GetStream(), _streamRateLimiterOptions,
-                _proxyListenerSettings.MaxBytesPerRead, _proxyListenerSettings.CloseConnectionWhenRateExceeded)
-            {
-                ReadTimeout = _proxyListenerSettings.ReceiveTimeout
-            };
+                _proxyListenerSettings.MaxBytesPerRead, _proxyListenerSettings.CloseConnectionWhenRateExceeded,
+                _proxyListenerSettings.ReceiveTimeout);
 
             Console.WriteLine($"Attempting to connect to Server: {_serverEndPoint}");
             serverClient = new TcpClient();

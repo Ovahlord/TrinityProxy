@@ -8,14 +8,16 @@ public class RateLimitedStream : Stream
     private readonly SlidingWindowRateLimiter _rateLimiter;
     private readonly int _maxBytesPerRead;
     private readonly bool _closeConnectionWhenRateExceeded;
+    private readonly int _idleTimeout;
     private volatile bool _disposed;
-    
-    public RateLimitedStream(Stream innerStream, SlidingWindowRateLimiterOptions rateLimiterOptions, int maxBytesPerRead, bool closeConnectionWhenRateExceeded)
+
+    public RateLimitedStream(Stream innerStream, SlidingWindowRateLimiterOptions rateLimiterOptions, int maxBytesPerRead, bool closeConnectionWhenRateExceeded, int idleTimeout)
     {
         _innerStream = innerStream;
         _rateLimiter = new SlidingWindowRateLimiter(rateLimiterOptions);
         _maxBytesPerRead = maxBytesPerRead;
         _closeConnectionWhenRateExceeded =  closeConnectionWhenRateExceeded;
+        _idleTimeout = idleTimeout;
     }
 
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
@@ -28,7 +30,7 @@ public class RateLimitedStream : Stream
             {
                 using RateLimitLease lease = await _rateLimiter.AcquireAsync(bytesPerRead, cancellationToken);
                 if (lease.IsAcquired)
-                    return await _innerStream.ReadAsync(buffer.Slice(0, bytesPerRead), cancellationToken);
+                    return await ReadInnerStreamAsync(buffer.Slice(0, bytesPerRead), cancellationToken);
 
                 // If the rate limiter tokens are exhausted, try again in 100ms 
                 if (_closeConnectionWhenRateExceeded)
@@ -54,6 +56,28 @@ public class RateLimitedStream : Stream
 
     public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
         await ReadAsync(buffer.AsMemory(offset, count), cancellationToken);
+
+    private async ValueTask<int> ReadInnerStreamAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+    {
+        if (_idleTimeout <= 0)
+            return await _innerStream.ReadAsync(buffer, cancellationToken);
+
+        // Stream.ReadTimeout only governs synchronous reads, so the idle window has to be
+        // enforced with a cancellation token on the asynchronous path.
+        using CancellationTokenSource idleCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        idleCancellation.CancelAfter(_idleTimeout);
+
+        try
+        {
+            return await _innerStream.ReadAsync(buffer, idleCancellation.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            Console.WriteLine($"Connection closed after {_idleTimeout}ms without incoming data");
+            Close();
+            return 0;
+        }
+    }
 
     public override void Flush() => _innerStream.Flush();
     public override int Read(byte[] buffer, int offset, int count) => _innerStream.Read(buffer, offset, count);
