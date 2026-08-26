@@ -16,9 +16,14 @@ public class ProxyBridge
         _cancellationTokenSource = new CancellationTokenSource();
         _clientStream = clientStream;
         _serverStream = serverStream;
-        
-        _ = RouteStreamDataAsync(clientStream, serverStream, _cancellationTokenSource.Token);
-        _ = RouteStreamDataAsync(serverStream, clientStream, _cancellationTokenSource.Token);
+
+        // Read the token once up front: the first direction can run to completion synchronously
+        // (an already closed peer yields EOF without ever suspending) and close the bridge
+        // before the second direction is even started.
+        CancellationToken cancellationToken = _cancellationTokenSource.Token;
+
+        _ = RouteStreamDataAsync(clientStream, serverStream, cancellationToken);
+        _ = RouteStreamDataAsync(serverStream, clientStream, cancellationToken);
     }
 
     private void Close()
@@ -28,8 +33,9 @@ public class ProxyBridge
         if (Interlocked.Exchange(ref _closed, 1) == 1)
             return;
 
+        // Not disposed here: the other direction may still be awaiting on this token.
+        // Nothing schedules a timer on it, so letting it be collected costs nothing.
         _cancellationTokenSource.Cancel();
-        _cancellationTokenSource.Dispose();
         _clientStream.Dispose();
         _serverStream.Dispose();
         Console.WriteLine("Bridge closed");
