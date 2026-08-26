@@ -43,8 +43,10 @@ public class ProxyBridge
     
     private async Task RouteStreamDataAsync(Stream fromStream, Stream toStream, CancellationToken cancellationToken = default)
     {
-        PipeReader reader = PipeReader.Create(fromStream);
-        PipeWriter writer = PipeWriter.Create(toStream);
+        // leaveOpen: the bridge owns both streams and disposes them in Close(). Without this the
+        // pipes dispose them on completion, tearing them out from under the other direction.
+        PipeReader reader = PipeReader.Create(fromStream, new StreamPipeReaderOptions(leaveOpen: true));
+        PipeWriter writer = PipeWriter.Create(toStream, new StreamPipeWriterOptions(leaveOpen: true));
 
         try
         {
