@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.RateLimiting;
@@ -13,6 +14,7 @@ public class ProxyListener
     private readonly SlidingWindowRateLimiter _connectionRateLimiter;
     private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly ProxyListenerSettings _proxyListenerSettings;
+    private readonly ConcurrentDictionary<ProxyBridge, byte> _bridges = new();
     
     public ProxyListener(ProxyListenerSettings proxyListenerSettings)
     {
@@ -54,7 +56,10 @@ public class ProxyListener
     public void Stop()
     {
         _cancellationTokenSource.Cancel();
-        _cancellationTokenSource.Dispose();
+
+        // Cancelling only stops accepting; connections already bridged have to be closed too.
+        foreach (ProxyBridge bridge in _bridges.Keys)
+            bridge.Close();
     }
 
     private async Task ListenForClientsAsync(TcpListener listener, CancellationToken cancellationToken = default)
@@ -98,6 +103,7 @@ public class ProxyListener
     {
         RateLimitedStream? clientStream = null;
         TcpClient? serverClient = null;
+        ProxyBridge bridge;
 
         try
         {
@@ -112,7 +118,7 @@ public class ProxyListener
             Console.WriteLine($"New connection established with server {serverClient.Client.RemoteEndPoint}");
 
             // The bridge takes ownership of both streams once it is constructed.
-            new ProxyBridge(clientStream, serverClient.GetStream());
+            bridge = new ProxyBridge(clientStream, serverClient.GetStream());
         }
         catch (Exception exception)
         {
@@ -122,6 +128,18 @@ public class ProxyListener
             clientStream?.Dispose();
             serverClient?.Dispose();
             clientClient.Dispose();
+            return;
+        }
+
+        // Tracked so that Stop() can tear down connections that are already established.
+        _bridges.TryAdd(bridge, 0);
+        try
+        {
+            await bridge.Completion;
+        }
+        finally
+        {
+            _bridges.TryRemove(bridge, out _);
         }
     }
 }

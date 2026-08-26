@@ -8,7 +8,11 @@ public class ProxyBridge
     private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly Stream _clientStream;
     private readonly Stream _serverStream;
+    private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _closed;
+
+    /// <summary>Completes once the bridge has been closed from either side.</summary>
+    public Task Completion => _completion.Task;
 
 
     public ProxyBridge(Stream clientStream, Stream serverStream)
@@ -26,7 +30,7 @@ public class ProxyBridge
         _ = RouteStreamDataAsync(serverStream, clientStream, cancellationToken);
     }
 
-    private void Close()
+    public void Close()
     {
         // Both directions can fail at the same instant, and Cancel() after Dispose() throws,
         // so exactly one caller must be allowed through.
@@ -38,6 +42,7 @@ public class ProxyBridge
         _cancellationTokenSource.Cancel();
         _clientStream.Dispose();
         _serverStream.Dispose();
+        _completion.TrySetResult();
         Console.WriteLine("Bridge closed");
     }
     
